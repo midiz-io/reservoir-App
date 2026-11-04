@@ -1,0 +1,266 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 213 31% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 213 31% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 213 31% 15%;
+
+    --primary: 199 89% 32%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 199 30% 94%;
+    --secondary-foreground: 199 89% 25%;
+
+    --muted: 210 20% 95%;
+    --muted-foreground: 213 15% 45%;
+
+    --accent: 175 70% 41%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 210 20% 90%;
+    --input: 210 20% 90%;
+    --ring: 199 89% 32%;
+
+    --radius: 0.75rem;
+
+    /* Custom reservoir theme colors */
+    --water: 199 89% 48%;
+    --water-light: 199 70% 92%;
+    --water-dark: 199 89% 25%;
+    --reservoir: 213 31% 15%;
+    --success: 152 69% 40%;
+    --warning: 38 92% 50%;
+    --info: 199 89% 48%;
+
+    /* Gradients */
+    --gradient-water: linear-gradient(135deg, hsl(199 89% 48%) 0%, hsl(175 70% 41%) 100%);
+    --gradient-deep: linear-gradient(180deg, hsl(213 31% 15%) 0%, hsl(199 89% 25%) 100%);
+    --gradient-surface: linear-gradient(180deg, hsl(0 0% 100%) 0%, hsl(210 20% 98%) 100%);
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(213 31% 15% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(213 31% 15% / 0.07), 0 2px 4px -2px hsl(213 31% 15% / 0.05);
+    --shadow-lg: 0 10px 15px -3px hsl(213 31% 15% / 0.08), 0 4px 6px -4px hsl(213 31% 15% / 0.05);
+    --shadow-glow: 0 0 20px hsl(199 89% 48% / 0.3);
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 213 31% 15%;
+    --sidebar-primary: 199 89% 32%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 199 30% 94%;
+    --sidebar-accent-foreground: 199 89% 25%;
+    --sidebar-border: 210 20% 90%;
+    --sidebar-ring: 199 89% 32%;
+  }
+
+  .dark {
+    --background: 213 31% 9%;
+    --foreground: 210 20% 95%;
+
+    --card: 213 31% 12%;
+    --card-foreground: 210 20% 95%;
+
+    --popover: 213 31% 12%;
+    --popover-foreground: 210 20% 95%;
+
+    --primary: 199 89% 48%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 213 31% 18%;
+    --secondary-foreground: 199 70% 80%;
+
+    --muted: 213 31% 18%;
+    --muted-foreground: 210 15% 60%;
+
+    --accent: 175 70% 41%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 213 31% 20%;
+    --input: 213 31% 20%;
+    --ring: 199 89% 48%;
+
+    --water: 199 89% 55%;
+    --water-light: 199 50% 20%;
+    --water-dark: 199 89% 35%;
+
+    --sidebar-background: 213 31% 10%;
+    --sidebar-foreground: 210 20% 95%;
+    --sidebar-primary: 199 89% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 213 31% 18%;
+    --sidebar-accent-foreground: 199 70% 80%;
+    --sidebar-border: 213 31% 20%;
+    --sidebar-ring: 199 89% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-semibold tracking-tight;
+  }
+}
+
+@layer utilities {
+  .gradient-water {
+    background: var(--gradient-water);
+  }
+
+  .gradient-deep {
+    background: var(--gradient-deep);
+  }
+
+  .gradient-surface {
+    background: var(--gradient-surface);
+  }
+
+  .shadow-glow {
+    box-shadow: var(--shadow-glow);
+  }
+
+  .text-gradient-water {
+    background: var(--gradient-water);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+/* Map styles */
+.maplibregl-map {
+  font-family: inherit;
+}
+
+.maplibregl-popup-content {
+  @apply rounded-lg shadow-lg p-3 bg-card text-card-foreground border border-border;
+}
+
+.maplibregl-popup-close-button {
+  @apply text-muted-foreground hover:text-foreground p-2;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-muted/50 rounded-full;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/30 rounded-full hover:bg-muted-foreground/50;
+}
+
+/* Animations */
+@keyframes pulse-water {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(2.5);
+    opacity: 0;
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-pulse-water {
+  animation: pulse-water 2s ease-in-out infinite;
+}
+
+.animate-ripple {
+  animation: ripple 1.5s ease-out infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.5s ease-out forwards;
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
+}
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 10mm;
+  }
+  
+  body {
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  
+  /* Ensure charts and tables don't get broken across pages */
+  table, figure, .recharts-wrapper {
+    page-break-inside: avoid;
+  }
+}
