@@ -43,6 +43,7 @@ export default function HarvestDailyCostPage() {
             start.setHours(0, 0, 0, 0);
             end.setHours(0, 0, 0, 0);
 
+            const isApproved = bill.status === 'approved';
             const dateMatch = billDate >= start && billDate <= end;
             const officerMatch = fieldOfficerId === 'all' || bill.field_officer_employee_id === fieldOfficerId;
             const managerMatch = centerManagerId === 'all' ||
@@ -54,7 +55,7 @@ export default function HarvestDailyCostPage() {
             const locationMatch = locationId === 'all' || reservoir?.location_id === locationId;
             const resMatch = reservoirId === 'all' || bill.reservoir_id === reservoirId;
 
-            return dateMatch && officerMatch && managerMatch && locationMatch && resMatch;
+            return isApproved && dateMatch && officerMatch && managerMatch && locationMatch && resMatch;
         });
 
         return filteredBills.map((bill: any) => {

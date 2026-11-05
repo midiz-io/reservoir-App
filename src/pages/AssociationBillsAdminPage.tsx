@@ -240,6 +240,8 @@ export default function AssociationBillsAdminPage() {
         rejection_reason: 'Rejected by Admin',
         reviewed_by: user.id,
         reviewed_at: new Date().toISOString(),
+        box_number: null,
+        sealing_tag_number: null,
       });
       toast.success('Bill rejected successfully.');
       setIsApproveMode(false);
@@ -255,6 +257,8 @@ export default function AssociationBillsAdminPage() {
       await review.mutateAsync({
         id: bill.id,
         status: 'pending',
+        box_number: null,
+        sealing_tag_number: null,
       });
       toast.success(`Invoice #${bill.bill_no} is now Pending.`);
     } catch (e: any) {

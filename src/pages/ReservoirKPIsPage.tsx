@@ -25,9 +25,10 @@ export default function ReservoirKPIsPage() {
   });
 
   // generic KPIs will be calculated below
+  const approvedBills = (bills || []).filter(b => b.status === 'approved');
   const filteredBills = reservoirId === 'all' 
-    ? bills 
-    : bills?.filter(b => b.reservoir_id === reservoirId);
+    ? approvedBills 
+    : approvedBills.filter(b => b.reservoir_id === reservoirId);
 
   let totalHarvest = 0;
   let totalRevenue = 0;

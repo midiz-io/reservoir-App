@@ -80,7 +80,7 @@ export default function HarvestDetailsReportPage() {
 
             const billNoMatch = !searchBillNo || (bill.bill_no && bill.bill_no.toLowerCase().includes(searchBillNo.toLowerCase()));
 
-            const isApproved = bill.status === 'approved' || !!(bill.box_number || (bill.sealing_tag_number && bill.sealing_tag_number.trim() !== ''));
+            const isApproved = bill.status === 'approved';
 
             return isApproved && dateMatch && officerMatch && managerMatch && reservoirMatch && locationMatch && billNoMatch;
         });

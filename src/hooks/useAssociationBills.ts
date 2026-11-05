@@ -101,8 +101,8 @@ export function useReviewAssociationBill() {
         rejection_reason: status === 'rejected' ? (rejection_reason || 'Rejected') : null,
         reviewed_by: status === 'pending' ? null : reviewed_by,
         reviewed_at: status === 'pending' ? null : reviewed_at,
-        box_number: box_number || undefined,
-        sealing_tag_number: sealing_tag_number || undefined,
+        box_number: (status === 'rejected' || status === 'pending') && box_number === undefined ? null : (box_number || undefined),
+        sealing_tag_number: (status === 'rejected' || status === 'pending') && sealing_tag_number === undefined ? null : (sealing_tag_number || undefined),
         remarks: remarks || null,
       };
 

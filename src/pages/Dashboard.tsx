@@ -27,6 +27,7 @@ export default function Dashboard() {
     }
 
     const filtered = bills.filter(b => {
+      if (b.status !== 'approved') return false;
       const bDate = new Date(b.bill_date);
       // For 'today', match exact date. For others, >= startDate.
       if (timeFilter === 'today') {
