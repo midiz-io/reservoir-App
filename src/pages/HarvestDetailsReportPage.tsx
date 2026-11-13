@@ -5,17 +5,19 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Printer, Calendar, BarChart3, Filter, ArrowLeft } from 'lucide-react';
+import { Loader2, Printer, Calendar, BarChart3, Filter, ArrowLeft, Download, FileSpreadsheet, FileText } from 'lucide-react';
 import { useAssociationBills } from '@/hooks/useAssociationBills';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useReservoirs } from '@/hooks/useReservoirs';
 import { useLocations } from '@/hooks/useLocations';
 
 type ReportType = 'daily' | 'weekly' | 'monthly' | 'yearly';
+type ActiveTabType = 'details' | 'valuation';
 
 export default function HarvestDetailsReportPage() {
     const navigate = useNavigate();
     const [reportType, setReportType] = useState<ReportType>('daily');
+    const [activeReportTab, setActiveReportTab] = useState<ActiveTabType>('details');
     const [fieldOfficerId, setFieldOfficerId] = useState<string>('all');
     const [centerManagerId, setCenterManagerId] = useState<string>('all');
     const [reservoirId, setReservoirId] = useState<string>('all');
@@ -180,6 +182,152 @@ export default function HarvestDetailsReportPage() {
         };
     }, [reportRows]);
 
+    // Pivoted row data for Rate & Valuation Report matching Image 1
+    const valuationRows = useMemo(() => {
+        return filteredBills.map((bill: any) => {
+            const items = Array.isArray(bill.items) ? bill.items : [];
+
+            let qty250gUp = 0;
+            let val250gUp = 0;
+            let rate250gUp = 0;
+
+            let qty150gUp = 0;
+            let val150gUp = 0;
+            let rate150gUp = 0;
+
+            let qtyRej = 0;
+            let valRej = 0;
+            let rateRej = 0;
+
+            let qtyGalIsso = 0;
+            let valGalIsso = 0;
+            let rateGalIsso = 0;
+
+            let otherQty = 0;
+            let otherVal = 0;
+
+            items.forEach((it: any) => {
+                const desc = (it.description || '').toLowerCase().trim();
+                const qty = Number(it.qty) || 0;
+                const price = Number(it.unit_price) || 0;
+                const amt = Number(it.line_total || (qty * price)) || 0;
+
+                if (desc.includes('250 up') || desc.includes('250g up') || desc.includes('250g exp') || desc.includes('250 exp') || desc.includes('1250g') || desc.includes('>250')) {
+                    qty250gUp += qty;
+                    val250gUp += amt;
+                    if (price > 0) rate250gUp = price;
+                } else if (desc.includes('150 up') || desc.includes('150g up') || desc.includes('150g exp') || desc.includes('250 below') || desc.includes('250g below') || desc.includes('150g')) {
+                    qty150gUp += qty;
+                    val150gUp += amt;
+                    if (price > 0) rate150gUp = price;
+                } else if (desc.includes('rej') || desc.includes('reject') || desc.includes('grade b') || desc.includes('b grade')) {
+                    qtyRej += qty;
+                    valRej += amt;
+                    if (price > 0) rateRej = price;
+                } else if (desc.includes('gal isso') || desc.includes('galisso') || desc.includes('gal_isso')) {
+                    qtyGalIsso += qty;
+                    valGalIsso += amt;
+                    if (price > 0) rateGalIsso = price;
+                } else {
+                    otherQty += qty;
+                    otherVal += amt;
+                }
+            });
+
+            if (rate250gUp === 0 && qty250gUp > 0 && val250gUp > 0) rate250gUp = val250gUp / qty250gUp;
+            if (rate150gUp === 0 && qty150gUp > 0 && val150gUp > 0) rate150gUp = val150gUp / qty150gUp;
+            if (rateRej === 0 && qtyRej > 0 && valRej > 0) rateRej = valRej / qtyRej;
+            if (rateGalIsso === 0 && qtyGalIsso > 0 && valGalIsso > 0) rateGalIsso = valGalIsso / qtyGalIsso;
+
+            const totalQty = qty250gUp + qty150gUp + qtyRej + qtyGalIsso + otherQty;
+            const totalVal = val250gUp + val150gUp + valRej + valGalIsso + otherVal;
+
+            let formattedDate = bill.bill_date ? bill.bill_date.split('T')[0] : '—';
+            try {
+                const d = new Date(bill.bill_date.split('T')[0]);
+                if (!isNaN(d.getTime())) {
+                    const day = d.getDate();
+                    const mon = d.toLocaleString('en-US', { month: 'short' });
+                    const yr = d.getFullYear();
+                    formattedDate = `${day} ${mon} ${yr}`;
+                }
+            } catch {}
+
+            return {
+                id: bill.id,
+                date: formattedDate,
+                reservoir_name: bill.reservoirs?.name || '—',
+                collector: bill.supplier_name || bill.purchaser_name || '—',
+                field_officer: bill.employees?.full_name || '—',
+                bill_no: bill.bill_no || '—',
+                bill_received: (bill as any).bill_received || (bill.status === 'approved' ? 'Yes' : '—'),
+                qty250gUp,
+                rate250gUp,
+                val250gUp,
+                qty150gUp,
+                rate150gUp,
+                val150gUp,
+                qtyRej,
+                rateRej,
+                valRej,
+                qtyGalIsso,
+                rateGalIsso,
+                valGalIsso,
+                totalQty,
+                totalVal,
+            };
+        });
+    }, [filteredBills]);
+
+    // Totals for Valuation Report
+    const valuationTotals = useMemo(() => {
+        let totQty250 = 0;
+        let totVal250 = 0;
+        let totQty150 = 0;
+        let totVal150 = 0;
+        let totQtyRej = 0;
+        let totValRej = 0;
+        let totQtyGal = 0;
+        let totValGal = 0;
+        let grandQty = 0;
+        let grandVal = 0;
+
+        valuationRows.forEach((r) => {
+            totQty250 += r.qty250gUp;
+            totVal250 += r.val250gUp;
+            totQty150 += r.qty150gUp;
+            totVal150 += r.val150gUp;
+            totQtyRej += r.qtyRej;
+            totValRej += r.valRej;
+            totQtyGal += r.qtyGalIsso;
+            totValGal += r.valGalIsso;
+            grandQty += r.totalQty;
+            grandVal += r.totalVal;
+        });
+
+        const avgRate250 = totQty250 > 0 ? totVal250 / totQty250 : null;
+        const avgRate150 = totQty150 > 0 ? totVal150 / totQty150 : null;
+        const avgRateRej = totQtyRej > 0 ? totValRej / totQtyRej : null;
+        const avgRateGal = totQtyGal > 0 ? totValGal / totQtyGal : null;
+
+        return {
+            totQty250,
+            avgRate250,
+            totVal250,
+            totQty150,
+            avgRate150,
+            totVal150,
+            totQtyRej,
+            avgRateRej,
+            totValRej,
+            totQtyGal,
+            avgRateGal,
+            totValGal,
+            grandQty,
+            grandVal,
+        };
+    }, [valuationRows]);
+
     const selectedCenterName = useMemo(() => {
         if (locationId === 'all') return null;
         return locations?.find((l: any) => l.id === locationId)?.name || null;
@@ -187,6 +335,95 @@ export default function HarvestDetailsReportPage() {
 
     const handlePrint = () => {
         window.print();
+    };
+
+    const handleExportCSV = () => {
+        if (activeReportTab === 'valuation') {
+            const headers = [
+                'Date', 'Reservoir', 'Collector', 'Field Officer', 'Bill n', 'Bill Received',
+                '250g up EXP', '250g up Rate', 'Value',
+                '150g up EXP', '150g up Rate', 'Value',
+                'Rej', 'Reject Rate', 'Value',
+                'Gal isso', 'Rate', 'Value',
+                'Total Qty', 'Value'
+            ];
+
+            const rows = valuationRows.map(r => [
+                `"${r.date}"`,
+                `"${r.reservoir_name}"`,
+                `"${r.collector}"`,
+                `"${r.field_officer}"`,
+                `"${r.bill_no}"`,
+                `"${r.bill_received}"`,
+                r.qty250gUp > 0 ? r.qty250gUp.toFixed(3) : '',
+                r.rate250gUp > 0 ? Math.round(r.rate250gUp) : '',
+                r.val250gUp > 0 ? Math.round(r.val250gUp) : 0,
+                r.qty150gUp > 0 ? r.qty150gUp.toFixed(3) : '',
+                r.rate150gUp > 0 ? Math.round(r.rate150gUp) : '',
+                r.val150gUp > 0 ? Math.round(r.val150gUp) : 0,
+                r.qtyRej > 0 ? r.qtyRej.toFixed(3) : '',
+                r.rateRej > 0 ? Math.round(r.rateRej) : '',
+                r.valRej > 0 ? Math.round(r.valRej) : 0,
+                r.qtyGalIsso > 0 ? r.qtyGalIsso.toFixed(3) : '',
+                r.rateGalIsso > 0 ? Math.round(r.rateGalIsso) : '',
+                r.valGalIsso > 0 ? Math.round(r.valGalIsso) : 0,
+                r.totalQty.toFixed(3),
+                r.totalVal > 0 ? Math.round(r.totalVal) : 0
+            ]);
+
+            const totalRow = [
+                'Total', '', '', '', '', '',
+                valuationTotals.totQty250.toFixed(3),
+                valuationTotals.avgRate250 !== null ? Math.round(valuationTotals.avgRate250) : '#DIV/0!',
+                valuationTotals.totVal250.toFixed(3),
+                valuationTotals.totQty150.toFixed(3),
+                valuationTotals.avgRate150 !== null ? Math.round(valuationTotals.avgRate150) : '#DIV/0!',
+                valuationTotals.totVal150.toFixed(3),
+                valuationTotals.totQtyRej.toFixed(3),
+                valuationTotals.avgRateRej !== null ? Math.round(valuationTotals.avgRateRej) : '#DIV/0!',
+                valuationTotals.totValRej.toFixed(3),
+                valuationTotals.totQtyGal.toFixed(3),
+                valuationTotals.avgRateGal !== null ? Math.round(valuationTotals.avgRateGal) : '#DIV/0!',
+                valuationTotals.totValGal.toFixed(3),
+                valuationTotals.grandQty.toFixed(3),
+                valuationTotals.grandVal.toFixed(3)
+            ];
+
+            const csvContent = [headers.join(','), ...rows.map(row => row.join(',')), totalRow.join(',')].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `Harvest_Rate_Valuation_${startDate}_${endDate}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } else {
+            const headers = ['Date', 'Reservoir', 'Collector', 'Field officer', 'Bill No', ...itemColumns, 'Total kg'];
+            const rows = reportRows.map(r => [
+                `"${r.date}"`,
+                `"${r.reservoir_name}"`,
+                `"${r.collector}"`,
+                `"${r.field_officer}"`,
+                `"${r.bill_no}"`,
+                ...itemColumns.map(col => (r.itemQtys[col] || 0).toFixed(3)),
+                r.total_kg.toFixed(3)
+            ]);
+            const totalRow = [
+                'Totals', '', '', '', '',
+                ...itemColumns.map(col => (columnTotals.itemTotals[col] || 0).toFixed(3)),
+                columnTotals.grandTotalKg.toFixed(3)
+            ];
+            const csvContent = [headers.join(','), ...rows.map(row => row.join(',')), totalRow.join(',')].join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `Harvest_Details_Report_${startDate}_${endDate}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
     };
 
     const getReportTitle = () => {
@@ -214,13 +451,19 @@ export default function HarvestDetailsReportPage() {
             </div>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 print:hidden">
                 <div>
-                    <h1 className="text-2xl font-display font-bold text-foreground">Harvest Details Report</h1>
-                    <p className="text-muted-foreground">View and export structured harvest summaries</p>
+                    <h1 className="text-2xl font-display font-bold text-foreground">Harvest Reports</h1>
+                    <p className="text-muted-foreground">View and export structured harvest summaries and valuation sheets</p>
                 </div>
-                <Button onClick={handlePrint} className="gradient-water">
-                    <Printer className="h-4 w-4 mr-2" />
-                    Print / Save PDF
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button onClick={handleExportCSV} variant="outline" className="border-border">
+                        <Download className="h-4 w-4 mr-2" />
+                        Export CSV
+                    </Button>
+                    <Button onClick={handlePrint} className="gradient-water">
+                        <Printer className="h-4 w-4 mr-2" />
+                        Print / Save PDF
+                    </Button>
+                </div>
             </div>
 
             <div className="flex flex-col lg:flex-row gap-6 mb-8 print:hidden">
@@ -387,101 +630,243 @@ export default function HarvestDetailsReportPage() {
                 </div>
             </div>
 
-            {/* Excel Sheet Restructured View */}
+            {/* View Mode Tabs Switcher */}
+            <div className="flex items-center justify-between mb-4 print:hidden">
+                <Tabs value={activeReportTab} onValueChange={(v) => setActiveReportTab(v as ActiveTabType)} className="w-full sm:w-auto">
+                    <TabsList className="grid grid-cols-2 w-full sm:w-[500px] h-10 p-1 bg-muted/80">
+                        <TabsTrigger value="details" className="gap-2 text-xs sm:text-sm font-medium">
+                            <FileText className="h-4 w-4" />
+                            Harvest Details Report
+                        </TabsTrigger>
+                        <TabsTrigger value="valuation" className="gap-2 text-xs sm:text-sm font-medium">
+                            <FileSpreadsheet className="h-4 w-4" />
+                            Rate & Valuation Report
+                        </TabsTrigger>
+                    </TabsList>
+                </Tabs>
+            </div>
+
+            {/* Printable Report View (Active Tab content is rendered here for seamless landscape printing) */}
             <div id="report-printable" className="bg-white p-6 rounded-lg shadow-sm border border-border print:shadow-none print:border-none print:p-0">
-                {/* Red/Coral Banner Header */}
-                <div className="bg-[#d96b63] text-white py-2.5 px-4 text-center font-bold text-lg rounded-t-md border-b-2 border-black">
-                    {selectedCenterName || 'Harvest Details Report'}
-                </div>
+                {activeReportTab === 'details' ? (
+                    <>
+                        {/* Red/Coral Banner Header */}
+                        <div className="bg-[#d96b63] text-white py-2.5 px-4 text-center font-bold text-lg rounded-t-md border-b-2 border-black">
+                            {selectedCenterName || 'Harvest Details Report'}
+                        </div>
 
-                <header className="flex flex-col items-center py-4 bg-slate-50 border-b border-black text-center mb-4">
-                    <h2 className="text-xl font-bold uppercase tracking-wide">HARVEST DETAILS REPORT</h2>
-                    <p className="text-sm font-semibold text-slate-700 mt-1">{getReportTitle()}</p>
-                </header>
+                        <header className="flex flex-col items-center py-4 bg-slate-50 border-b border-black text-center mb-4">
+                            <h2 className="text-xl font-bold uppercase tracking-wide">HARVEST DETAILS REPORT</h2>
+                            <p className="text-sm font-semibold text-slate-700 mt-1">{getReportTitle()}</p>
+                        </header>
 
-                {billsLoading ? (
-                    <div className="flex items-center justify-center py-20">
-                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                    </div>
-                ) : reportRows.length === 0 ? (
-                    <div className="text-center py-20 text-muted-foreground text-lg">
-                        No harvest data found for the selected criteria.
-                    </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full border-collapse border border-black text-[11px]">
-                            <thead>
-                                <tr className="bg-[#e08982] text-black font-bold">
-                                    <th className="border border-black p-1.5 text-left">Date</th>
-                                    <th className="border border-black p-1.5 text-left">Reservoir</th>
-                                    <th className="border border-black p-1.5 text-left">Collector</th>
-                                    <th className="border border-black p-1.5 text-left">Field officer</th>
-                                    <th className="border border-black p-1.5 text-left">Bill No</th>
-                                    {itemColumns.map((col) => (
-                                        <th key={col} className="border border-black p-1.5 text-right">{col}</th>
-                                    ))}
-                                    <th className="border border-black p-1.5 text-right bg-[#d96b63] text-white">Total kg</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {reportRows.map((row: any, idx: number) => (
-                                    <tr key={idx} className="hover:bg-slate-50">
-                                        <td className="border border-black p-1.5 font-medium">{row.date}</td>
-                                        <td className="border border-black p-1.5">{row.reservoir_name}</td>
-                                        <td className="border border-black p-1.5">{row.collector}</td>
-                                        <td className="border border-black p-1.5">{row.field_officer}</td>
-                                        <td className="border border-black p-1.5 font-mono">{row.bill_no}</td>
-                                        {itemColumns.map((col) => (
-                                            <td key={col} className="border border-black p-1.5 text-right">
-                                                {(row.itemQtys[col] || 0).toFixed(3)}
-                                            </td>
+                        {billsLoading ? (
+                            <div className="flex items-center justify-center py-20">
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            </div>
+                        ) : reportRows.length === 0 ? (
+                            <div className="text-center py-20 text-muted-foreground text-lg">
+                                No harvest data found for the selected criteria.
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full border-collapse border border-black text-[11px]">
+                                    <thead>
+                                        <tr className="bg-[#e08982] text-black font-bold">
+                                            <th className="border border-black p-1.5 text-left">Date</th>
+                                            <th className="border border-black p-1.5 text-left">Reservoir</th>
+                                            <th className="border border-black p-1.5 text-left">Collector</th>
+                                            <th className="border border-black p-1.5 text-left">Field officer</th>
+                                            <th className="border border-black p-1.5 text-left">Bill No</th>
+                                            {itemColumns.map((col) => (
+                                                <th key={col} className="border border-black p-1.5 text-right">{col}</th>
+                                            ))}
+                                            <th className="border border-black p-1.5 text-right bg-[#d96b63] text-white">Total kg</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {reportRows.map((row: any, idx: number) => (
+                                            <tr key={idx} className="hover:bg-slate-50">
+                                                <td className="border border-black p-1.5 font-medium">{row.date}</td>
+                                                <td className="border border-black p-1.5">{row.reservoir_name}</td>
+                                                <td className="border border-black p-1.5">{row.collector}</td>
+                                                <td className="border border-black p-1.5">{row.field_officer}</td>
+                                                <td className="border border-black p-1.5 font-mono">{row.bill_no}</td>
+                                                {itemColumns.map((col) => (
+                                                    <td key={col} className="border border-black p-1.5 text-right">
+                                                        {(row.itemQtys[col] || 0).toFixed(3)}
+                                                    </td>
+                                                ))}
+                                                <td className="border border-black p-1.5 text-right font-bold bg-slate-50">
+                                                    {row.total_kg.toFixed(3)}
+                                                </td>
+                                            </tr>
                                         ))}
-                                        <td className="border border-black p-1.5 text-right font-bold bg-slate-50">
-                                            {row.total_kg.toFixed(3)}
-                                        </td>
-                                    </tr>
-                                ))}
-                                {/* Bottom Totals Row matching Excel Image 3 red footer bar */}
-                                <tr className="font-bold bg-[#e08982] text-black">
-                                    <td colSpan={5} className="border border-black p-1.5 text-right font-extrabold uppercase tracking-wider">Totals</td>
-                                    {itemColumns.map((col) => (
-                                        <td key={col} className="border border-black p-1.5 text-right font-bold">
-                                            {(columnTotals.itemTotals[col] || 0).toFixed(3)}
-                                        </td>
-                                    ))}
-                                    <td className="border border-black p-1.5 text-right font-black bg-[#c95b53] text-white text-xs">
-                                        {columnTotals.grandTotalKg.toFixed(3)}
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
+                                        {/* Bottom Totals Row matching Excel Image 3 red footer bar */}
+                                        <tr className="font-bold bg-[#e08982] text-black">
+                                            <td colSpan={5} className="border border-black p-1.5 text-right font-extrabold uppercase tracking-wider">Totals</td>
+                                            {itemColumns.map((col) => (
+                                                <td key={col} className="border border-black p-1.5 text-right font-bold">
+                                                    {(columnTotals.itemTotals[col] || 0).toFixed(3)}
+                                                </td>
+                                            ))}
+                                            <td className="border border-black p-1.5 text-right font-black bg-[#c95b53] text-white text-xs">
+                                                {columnTotals.grandTotalKg.toFixed(3)}
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        {/* Box Numbers & Sealing Tag Numbers Summary Box above Signatures */}
+                        <div className="mt-6 mb-4 p-4 bg-slate-50 border border-black rounded text-xs space-y-2 font-medium">
+                            <div className="flex items-center gap-2">
+                                <span className="font-bold min-w-[140px]">1) Number of boxes:</span>
+                                <span className="font-semibold text-slate-900">{boxTagSummary.numberOfBoxes}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="font-bold min-w-[140px]">2) Box numbers:</span>
+                                <span className="font-mono text-slate-900">{boxTagSummary.boxNumbersStr || '—'}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="font-bold min-w-[140px]">3) Tag numbers:</span>
+                                <span className="font-mono text-slate-900">{boxTagSummary.tagNumbersStr || '—'}</span>
+                            </div>
+                        </div>
+
+                        <footer className="mt-10 grid grid-cols-2 gap-20 print:grid">
+                            <div className="text-center">
+                                <div className="border-t border-black border-dotted pt-1 mt-8 text-xs font-semibold">Field Officer Signature</div>
+                            </div>
+                            <div className="text-center">
+                                <div className="border-t border-black border-dotted pt-1 mt-8 text-xs font-semibold">Manager Signature</div>
+                            </div>
+                        </footer>
+                    </>
+                ) : (
+                    <>
+                        {/* Green Banner Header matching 1st Image Excel Sheet */}
+                        <div className="bg-[#548235] text-white py-2.5 px-4 text-center font-bold text-lg rounded-t-md border-b-2 border-black">
+                            {selectedCenterName ? `${selectedCenterName} - Harvest Rate & Valuation Report` : 'Harvest Rate & Valuation Report'}
+                        </div>
+
+                        <header className="flex flex-col items-center py-4 bg-slate-50 border-b border-black text-center mb-4">
+                            <h2 className="text-xl font-bold uppercase tracking-wide text-slate-800">HARVEST RATE & VALUATION REPORT</h2>
+                            <p className="text-sm font-semibold text-slate-700 mt-1">{getReportTitle()}</p>
+                        </header>
+
+                        {billsLoading ? (
+                            <div className="flex items-center justify-center py-20">
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            </div>
+                        ) : valuationRows.length === 0 ? (
+                            <div className="text-center py-20 text-muted-foreground text-lg">
+                                No harvest data found for the selected criteria.
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full border-collapse border border-black text-[11px]">
+                                    <thead>
+                                        <tr className="bg-[#a9d08e] text-black font-bold">
+                                            <th className="border border-black px-1.5 py-1.5 text-left whitespace-nowrap">Date</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-left whitespace-nowrap">Reservoir</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-left whitespace-nowrap">Collector</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-left whitespace-nowrap">Field Officer</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-left whitespace-nowrap">Bill n</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-center whitespace-nowrap">Bill Received</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap">250g up EXP</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap">250g up Rate</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap">Value</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap">150g up EXP</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap">150g up Rate</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap">Value</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap">Rej</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap text-[#c00000]">Reject Rate</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap text-[#c00000]">Value</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap">Gal isso</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap text-[#c00000]">Rate</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap text-[#c00000]">Value</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap">Total Qty</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap">Value</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {valuationRows.map((row: any, idx: number) => (
+                                            <tr key={idx} className="hover:bg-slate-50">
+                                                <td className="border border-black px-1.5 py-1 whitespace-nowrap font-medium">{row.date}</td>
+                                                <td className="border border-black px-1.5 py-1 whitespace-nowrap">{row.reservoir_name}</td>
+                                                <td className="border border-black px-1.5 py-1 whitespace-nowrap">{row.collector}</td>
+                                                <td className="border border-black px-1.5 py-1 whitespace-nowrap">{row.field_officer}</td>
+                                                <td className="border border-black px-1.5 py-1 whitespace-nowrap font-mono">{row.bill_no}</td>
+                                                <td className="border border-black px-1.5 py-1 whitespace-nowrap text-center font-semibold text-emerald-800">
+                                                    {row.bill_received}
+                                                </td>
+
+                                                {/* 250g up */}
+                                                <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-mono">{row.qty250gUp > 0 ? row.qty250gUp.toFixed(3) : ''}</td>
+                                                <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-semibold text-blue-700">{row.rate250gUp > 0 ? Math.round(row.rate250gUp).toLocaleString() : ''}</td>
+                                                <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-medium">{row.val250gUp > 0 ? Math.round(row.val250gUp).toLocaleString() : '0'}</td>
+
+                                                {/* 150g up */}
+                                                <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-mono">{row.qty150gUp > 0 ? row.qty150gUp.toFixed(3) : ''}</td>
+                                                <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-semibold text-blue-700">{row.rate150gUp > 0 ? Math.round(row.rate150gUp).toLocaleString() : ''}</td>
+                                                <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-medium">{row.val150gUp > 0 ? Math.round(row.val150gUp).toLocaleString() : '0'}</td>
+
+                                                {/* Rej */}
+                                                <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-mono">{row.qtyRej > 0 ? row.qtyRej.toFixed(3) : ''}</td>
+                                                <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-semibold text-rose-600">{row.rateRej > 0 ? Math.round(row.rateRej).toLocaleString() : ''}</td>
+                                                <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-medium">{row.valRej > 0 ? Math.round(row.valRej).toLocaleString() : '0'}</td>
+
+                                                {/* Gal isso */}
+                                                <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-mono">{row.qtyGalIsso > 0 ? row.qtyGalIsso.toFixed(3) : ''}</td>
+                                                <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-semibold text-rose-600">{row.rateGalIsso > 0 ? Math.round(row.rateGalIsso).toLocaleString() : ''}</td>
+                                                <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-medium">{row.valGalIsso > 0 ? Math.round(row.valGalIsso).toLocaleString() : '0'}</td>
+
+                                                {/* Total Qty & Value */}
+                                                <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-bold bg-slate-50 font-mono">{row.totalQty.toFixed(3)}</td>
+                                                <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-bold bg-slate-50">{row.totalVal > 0 ? Math.round(row.totalVal).toLocaleString() : '0'}</td>
+                                            </tr>
+                                        ))}
+
+                                        {/* Bottom Total Row matching Image 1 */}
+                                        <tr className="font-bold bg-[#e2efda] text-black">
+                                            <td colSpan={6} className="border border-black px-1.5 py-1.5 text-center font-extrabold uppercase tracking-wide">Total</td>
+
+                                            <td className="border border-black px-1.5 py-1.5 text-right font-mono">{valuationTotals.totQty250.toFixed(3)}</td>
+                                            <td className="border border-black px-1.5 py-1.5 text-right font-semibold text-blue-800">{valuationTotals.avgRate250 !== null ? Math.round(valuationTotals.avgRate250).toLocaleString() : '#DIV/0!'}</td>
+                                            <td className="border border-black px-1.5 py-1.5 text-right">{valuationTotals.totVal250.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</td>
+
+                                            <td className="border border-black px-1.5 py-1.5 text-right font-mono">{valuationTotals.totQty150.toFixed(3)}</td>
+                                            <td className="border border-black px-1.5 py-1.5 text-right font-semibold text-blue-800">{valuationTotals.avgRate150 !== null ? Math.round(valuationTotals.avgRate150).toLocaleString() : '#DIV/0!'}</td>
+                                            <td className="border border-black px-1.5 py-1.5 text-right">{valuationTotals.totVal150.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</td>
+
+                                            <td className="border border-black px-1.5 py-1.5 text-right font-mono">{valuationTotals.totQtyRej.toFixed(3)}</td>
+                                            <td className="border border-black px-1.5 py-1.5 text-right font-semibold text-rose-700">{valuationTotals.avgRateRej !== null ? Math.round(valuationTotals.avgRateRej).toLocaleString() : '#DIV/0!'}</td>
+                                            <td className="border border-black px-1.5 py-1.5 text-right">{valuationTotals.totValRej.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</td>
+
+                                            <td className="border border-black px-1.5 py-1.5 text-right font-mono">{valuationTotals.totQtyGal.toFixed(3)}</td>
+                                            <td className="border border-black px-1.5 py-1.5 text-right font-semibold text-rose-700">{valuationTotals.avgRateGal !== null ? Math.round(valuationTotals.avgRateGal).toLocaleString() : '#DIV/0!'}</td>
+                                            <td className="border border-black px-1.5 py-1.5 text-right">{valuationTotals.totValGal.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</td>
+
+                                            <td className="border border-black px-1.5 py-1.5 text-right font-black font-mono">{valuationTotals.grandQty.toFixed(3)}</td>
+                                            <td className="border border-black px-1.5 py-1.5 text-right font-black">{valuationTotals.grandVal.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+
+                        <footer className="mt-10 grid grid-cols-2 gap-20 print:grid">
+                            <div className="text-center">
+                                <div className="border-t border-black border-dotted pt-1 mt-8 text-xs font-semibold">Field Officer Signature</div>
+                            </div>
+                            <div className="text-center">
+                                <div className="border-t border-black border-dotted pt-1 mt-8 text-xs font-semibold">Manager Signature</div>
+                            </div>
+                        </footer>
+                    </>
                 )}
-
-                {/* Box Numbers & Sealing Tag Numbers Summary Box above Signatures */}
-                <div className="mt-6 mb-4 p-4 bg-slate-50 border border-black rounded text-xs space-y-2 font-medium">
-                    <div className="flex items-center gap-2">
-                        <span className="font-bold min-w-[140px]">1) Number of boxes:</span>
-                        <span className="font-semibold text-slate-900">{boxTagSummary.numberOfBoxes}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="font-bold min-w-[140px]">2) Box numbers:</span>
-                        <span className="font-mono text-slate-900">{boxTagSummary.boxNumbersStr || '—'}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <span className="font-bold min-w-[140px]">3) Tag numbers:</span>
-                        <span className="font-mono text-slate-900">{boxTagSummary.tagNumbersStr || '—'}</span>
-                    </div>
-                </div>
-
-                <footer className="mt-10 grid grid-cols-2 gap-20 print:grid">
-                    <div className="text-center">
-                        <div className="border-t border-black border-dotted pt-1 mt-8 text-xs font-semibold">Field Officer Signature</div>
-                    </div>
-                    <div className="text-center">
-                        <div className="border-t border-black border-dotted pt-1 mt-8 text-xs font-semibold">Manager Signature</div>
-                    </div>
-                </footer>
             </div>
 
       <style>{`
