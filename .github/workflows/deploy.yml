@@ -1,0 +1,45 @@
+# Push to main → deploy reservoir-watch to Vercel production.
+#
+# The deploy runs with a tech@midiz.online Vercel token (secret VERCEL_TOKEN),
+# so the person who pushed does not need a seat on the Vercel team.
+# Git metadata is stripped before deploying so Vercel attributes the deploy
+# to the token owner, not the commit author. Vercel's own Git auto-deploy is
+# turned off in vercel.json ("git": {"deploymentEnabled": false}).
+#
+# Repository secrets (all required): VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://reservoir-watch.vercel.app
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Strip git metadata (deploy as the tech@midiz.online token, not the commit author)
+        run: rm -rf .git
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Deploy to production
+        run: npx --yes vercel@65.14.0 deploy --prod --yes --token="$VERCEL_TOKEN"
+
+      - name: Summary
+        run: echo "Deployed ${GITHUB_SHA::7} → https://reservoir-watch.vercel.app" >> "$GITHUB_STEP_SUMMARY"
