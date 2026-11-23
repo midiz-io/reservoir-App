@@ -21,6 +21,9 @@ import SettingsPage from "./pages/SettingsPage";
 import EmailConfirmation from "./pages/EmailConfirmation";
 import AuditLogPage from "./pages/AuditLogPage";
 import ReservoirKPIsPage from "./pages/ReservoirKPIsPage";
+import ReservoirBreakdownPage from "./pages/ReservoirBreakdownPage";
+import TagTrackingPage from "./pages/TagTrackingPage";
+import IceDetailsPage from "./pages/IceDetailsPage";
 import NotificationsPage from "./pages/NotificationsPage";
 
 import AssociationBillEntryPage from "./pages/AssociationBillEntryPage";
@@ -273,6 +276,30 @@ function AppRoutes() {
         element={
           <ProtectedRoute adminOnly allowedRoles={['super_admin']}>
             <ReservoirKPIsPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/reservoirs/breakdown"
+        element={
+          <ProtectedRoute allowedRoles={['super_admin', 'employee']}>
+            <ReservoirBreakdownPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/tags"
+        element={
+          <ProtectedRoute allowedRoles={['super_admin', 'employee']}>
+            <TagTrackingPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ice-details"
+        element={
+          <ProtectedRoute allowedRoles={['super_admin', 'employee']}>
+            <IceDetailsPage />
           </ProtectedRoute>
         }
       />

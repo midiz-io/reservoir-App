@@ -425,6 +425,224 @@ export type Database = {
           },
         ]
       }
+      reservoir_pl_stockings: {
+        Row: {
+          id: string
+          reservoir_id: string
+          stocked_date: string
+          pl_quantity: number
+          batch_reference: string | null
+          notes: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          reservoir_id: string
+          stocked_date: string
+          pl_quantity: number
+          batch_reference?: string | null
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          reservoir_id?: string
+          stocked_date?: string
+          pl_quantity?: number
+          batch_reference?: string | null
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reservoir_pl_stockings_reservoir_id_fkey"
+            columns: ["reservoir_id"]
+            isOneToOne: false
+            referencedRelation: "reservoirs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tag_dispatches: {
+        Row: {
+          id: string
+          prefix: string
+          start_number: number
+          end_number: number
+          pad_length: number
+          sent_date: string
+          reservoir_id: string | null
+          location_id: string | null
+          field_officer_employee_id: string | null
+          notes: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          prefix?: string
+          start_number: number
+          end_number: number
+          pad_length?: number
+          sent_date: string
+          reservoir_id?: string | null
+          location_id?: string | null
+          field_officer_employee_id?: string | null
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          prefix?: string
+          start_number?: number
+          end_number?: number
+          pad_length?: number
+          sent_date?: string
+          reservoir_id?: string | null
+          location_id?: string | null
+          field_officer_employee_id?: string | null
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tag_dispatches_reservoir_id_fkey"
+            columns: ["reservoir_id"]
+            isOneToOne: false
+            referencedRelation: "reservoirs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tag_dispatches_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tag_dispatches_field_officer_employee_id_fkey"
+            columns: ["field_officer_employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_sheet_sync_configs: {
+        Row: {
+          id: string
+          config_key: string
+          sheet_url: string
+          apps_script_url: string
+          auto_sync_enabled: boolean
+          last_synced_at: string | null
+          last_synced_count: number | null
+          updated_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          config_key?: string
+          sheet_url?: string
+          apps_script_url?: string
+          auto_sync_enabled?: boolean
+          last_synced_at?: string | null
+          last_synced_count?: number | null
+          updated_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          config_key?: string
+          sheet_url?: string
+          apps_script_url?: string
+          auto_sync_enabled?: boolean
+          last_synced_at?: string | null
+          last_synced_count?: number | null
+          updated_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      ice_details: {
+        Row: {
+          id: string
+          entry_date: string
+          boxes: number
+          ice_cubes: number
+          unit_rate: number
+          bill_no: string
+          bill_amount: number
+          payment_ref: string | null
+          paid_amount: number
+          paid_date: string | null
+          driver_name: string | null
+          location_id: string | null
+          notes: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          entry_date: string
+          boxes?: number
+          ice_cubes?: number
+          unit_rate?: number
+          bill_no?: string
+          bill_amount?: number
+          payment_ref?: string | null
+          paid_amount?: number
+          paid_date?: string | null
+          driver_name?: string | null
+          location_id?: string | null
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          entry_date?: string
+          boxes?: number
+          ice_cubes?: number
+          unit_rate?: number
+          bill_no?: string
+          bill_amount?: number
+          payment_ref?: string | null
+          paid_amount?: number
+          paid_date?: string | null
+          driver_name?: string | null
+          location_id?: string | null
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ice_details_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string

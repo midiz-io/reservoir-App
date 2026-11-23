@@ -23,6 +23,9 @@ import {
   Activity,
   History,
   Bell,
+  Hash,
+  Layers,
+  ThermometerSnowflake,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState, useEffect } from 'react';
@@ -33,9 +36,12 @@ const navItems = [
   { to: '/association/bills/new', icon: Receipt, label: 'Bill Entry', roles: ['fisheries_association'] },
   { to: '/packing/bills', icon: Package, label: 'Packing Check', roles: ['packing_staff'] },
   { to: '/admin/association-bills', icon: Inbox, label: 'Bill Approvals', roles: ['super_admin', 'employee'] },
+  { to: '/tags', icon: Hash, label: 'Tag Tracking', roles: ['super_admin', 'employee'] },
+  { to: '/ice-details', icon: ThermometerSnowflake, label: 'Ice Details', roles: ['super_admin', 'employee'] },
   { to: '/center/expenses', icon: Receipt, label: 'Center Expenses', roles: ['super_admin', 'employee'] },
   { to: '/admin/association-registration', icon: ClipboardList, label: 'Association Registration', roles: ['super_admin'] },
   { to: '/reservoirs', icon: Droplets, label: 'Reservoirs', roles: ['super_admin'], end: true },
+  { to: '/reservoirs/breakdown', icon: Layers, label: 'Reservoir Breakdown', roles: ['super_admin', 'employee'] },
   { to: '/reservoirs/kpis', icon: Activity, label: 'Reservoir KPIs', roles: ['super_admin'] },
   { to: '/locations', icon: MapPin, label: 'Locations', roles: ['super_admin'] },
   { to: '/suppliers', icon: Users, label: 'Suppliers', roles: ['super_admin'] },

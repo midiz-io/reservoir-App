@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { useAssociationBills, useUpdateAssociationBill } from '@/hooks/useAssociationBills';
 import { useNavigate } from 'react-router-dom';
+import { TagNumberInput } from '@/components/bills/TagNumberInput';
 
 export default function PackingBillsPage() {
   const { user } = useAuth();
@@ -453,10 +454,12 @@ export default function PackingBillsPage() {
                     <Label htmlFor="sealingTagNumber" className="flex items-center gap-1.5 text-xs font-black uppercase tracking-widest text-primary">
                       <Hash className="h-3.5 w-3.5" /> 2. Tag NO *
                     </Label>
-                    <Input
+                    <TagNumberInput
                       id="sealingTagNumber"
                       value={sealingTagNumber}
-                      onChange={(e) => setSealingTagNumber(e.target.value)}
+                      onChange={setSealingTagNumber}
+                      reservoirId={selectedBill?.reservoir_id}
+                      excludeBillId={selectedBill?.id}
                       placeholder="e.g. TAG-998877"
                       className="bg-background border-2 h-11 text-base font-bold focus-visible:border-primary"
                     />

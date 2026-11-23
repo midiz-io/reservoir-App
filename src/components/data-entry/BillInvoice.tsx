@@ -3,6 +3,7 @@ import React from 'react';
 interface BillItem {
     description: string;
     qty: number | string;
+    pieces?: number | string;
     unit_price: number | string;
     line_total: number;
 }
@@ -97,10 +98,11 @@ export const BillInvoice: React.FC<BillInvoiceProps> = ({
                 <table className="w-full border-collapse border border-black text-xs uppercase font-bold">
                     <thead>
                         <tr>
-                            <th className="border border-black p-1 text-center w-[45%]">ITEM</th>
-                            <th className="border border-black p-1 text-center w-[15%]">QTY.</th>
-                            <th className="border border-black p-1 text-center w-[20%]">PRICE</th>
-                            <th className="border border-black p-1 text-center w-[20%]">VALUE</th>
+                            <th className="border border-black p-1 text-center w-[40%]">ITEM</th>
+                            <th className="border border-black p-1 text-center w-[12%]">QTY.</th>
+                            <th className="border border-black p-1 text-center w-[12%]">PCS.</th>
+                            <th className="border border-black p-1 text-center w-[18%]">PRICE</th>
+                            <th className="border border-black p-1 text-center w-[18%]">VALUE</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -108,6 +110,7 @@ export const BillInvoice: React.FC<BillInvoiceProps> = ({
                             <tr key={idx} className="h-8">
                                 <td className="border border-black px-2 py-1 align-middle">{item.description}</td>
                                 <td className="border border-black px-2 py-1 text-center align-middle">{item.qty}</td>
+                                <td className="border border-black px-2 py-1 text-center align-middle">{item.pieces || ''}</td>
                                 <td className="border border-black px-2 py-1 text-right align-middle">{Number(item.unit_price).toLocaleString()}</td>
                                 <td className="border border-black px-2 py-1 text-right align-middle">{item.line_total.toLocaleString()}</td>
                             </tr>
@@ -116,12 +119,13 @@ export const BillInvoice: React.FC<BillInvoiceProps> = ({
                             <tr key={`empty-${idx}`} className="h-8">
                                 <td className="border border-black px-2 py-1"></td>
                                 <td className="border border-black px-2 py-1 text-center"></td>
+                                <td className="border border-black px-2 py-1 text-center"></td>
                                 <td className="border border-black px-2 py-1 text-right"></td>
                                 <td className="border border-black px-2 py-1 text-right"></td>
                             </tr>
                         ))}
                         <tr>
-                            <td colSpan={3} className="border border-black px-2 py-2 text-right invisible">Total</td>
+                            <td colSpan={4} className="border border-black px-2 py-2 text-right invisible">Total</td>
                             <td className="border border-black px-2 py-2 text-right font-black text-lg bg-slate-50">
                                 {total.toLocaleString()}
                             </td>

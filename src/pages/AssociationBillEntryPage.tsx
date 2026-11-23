@@ -15,6 +15,7 @@ import { useReservoirs } from '@/hooks/useReservoirs';
 import { useAssociationBills, useCreateAssociationBill, useUpdateAssociationBill } from '@/hooks/useAssociationBills';
 import { useSuppliers } from '@/hooks/useSuppliers';
 import { BillInvoice } from '@/components/data-entry/BillInvoice';
+import { TagNumberInput } from '@/components/bills/TagNumberInput';
 import { SearchableSelect } from '@/components/ui/SearchableSelect';
 import { usePriceCatalog } from '@/hooks/usePriceCatalog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
@@ -22,6 +23,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 type LineItem = {
   description: string;
   qty: string;
+  pieces: string;
   unit_price: string;
 };
 
@@ -166,7 +168,7 @@ export default function AssociationBillEntryPage() {
   const [photoFile, setPhotoFile] = useState<File | null>(null);
 
   const [items, setItems] = useState<LineItem[]>([
-    { description: '', qty: '', unit_price: '' },
+    { description: '', qty: '', pieces: '', unit_price: '' },
   ]);
 
   const [activeRowIndex, setActiveRowIndex] = useState<number>(0);
@@ -327,6 +329,10 @@ export default function AssociationBillEntryPage() {
     return items.reduce((sum, it) => sum + toNumber(it.qty), 0);
   }, [items]);
 
+  const computedTotalPieces = useMemo(() => {
+    return items.reduce((sum, it) => sum + toNumber(it.pieces), 0);
+  }, [items]);
+
   const computedPLCount = useMemo(() => {
     return computedTotalQty * 100;
   }, [computedTotalQty]);
@@ -366,7 +372,7 @@ export default function AssociationBillEntryPage() {
     items.every(i => i.description.trim() && toNumber(i.qty) > 0 && toNumber(i.unit_price) >= 0) &&
     !createBill.isPending;
 
-  const addItem = () => setItems(prev => [...prev, { description: '', qty: '', unit_price: '' }]);
+  const addItem = () => setItems(prev => [...prev, { description: '', qty: '', pieces: '', unit_price: '' }]);
   const removeItem = (idx: number) => setItems(prev => prev.filter((_, i) => i !== idx));
 
   const updateItem = (idx: number, patch: Partial<LineItem>) => {
@@ -417,6 +423,7 @@ export default function AssociationBillEntryPage() {
     setItems(bill.items.map((it: any) => ({
       description: it.description,
       qty: it.qty.toString(),
+      pieces: it.pieces !== undefined && it.pieces !== null ? it.pieces.toString() : '',
       unit_price: it.unit_price.toString()
     })));
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -431,7 +438,7 @@ export default function AssociationBillEntryPage() {
     setRemarks('');
     setSealingTagNumber('');
     setBoxNumber('');
-    setItems([{ description: '', qty: '', unit_price: '' }]);
+    setItems([{ description: '', qty: '', pieces: '', unit_price: '' }]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -476,6 +483,7 @@ export default function AssociationBillEntryPage() {
         items: items.map((it, idx) => ({
           description: it.description.trim(),
           qty: toNumber(it.qty),
+          pieces: toNumber(it.pieces) > 0 ? toNumber(it.pieces) : 0,
           unit_price: toNumber(it.unit_price),
           line_total: lineTotals[idx],
         })) as any,
@@ -712,14 +720,16 @@ export default function AssociationBillEntryPage() {
                     />
                   </div>
 
-                  <div className="md:col-span-3 space-y-2">
+                  <div className="md:col-span-6 space-y-2">
                     <Label htmlFor="sealingTagNumber" className="text-sm font-bold">Sealing Tag No:</Label>
-                    <Input
+                    <TagNumberInput
                       id="sealingTagNumber"
                       value={sealingTagNumber}
-                      onChange={(e) => setSealingTagNumber(e.target.value)}
-                      placeholder="Tag Number"
-                      className="border-b-2 border-t-0 border-x-0 rounded-none focus-visible:ring-0 focus-visible:border-primary h-10 px-0 font-mono bg-transparent"
+                      onChange={setSealingTagNumber}
+                      reservoirId={reservoirId}
+                      excludeBillId={editingBillId}
+                      placeholder="Enter or select sent tag number"
+                      className="border-b-2 border-t-0 border-x-0 rounded-none focus-visible:ring-0 focus-visible:border-primary h-10 px-0 bg-transparent"
                     />
                   </div>
 
@@ -797,6 +807,15 @@ export default function AssociationBillEntryPage() {
                         </span>
                       </div>
 
+                      <div className="h-10 w-px bg-slate-800 hidden md:block"></div>
+
+                      <div className="flex flex-col">
+                        <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Pieces (Pcs)</span>
+                        <span className="text-2xl font-black text-emerald-400">
+                          {toNumber(items[activeRowIndex]?.pieces).toLocaleString()} <span className="text-sm font-normal text-slate-400">pcs</span>
+                        </span>
+                      </div>
+
                       <div className="ml-auto bg-gradient-to-br from-primary/30 to-primary/10 px-6 py-3 rounded-xl border border-primary/40 backdrop-blur-sm">
                         <span className="text-[10px] uppercase font-black tracking-widest text-primary-foreground/70 block mb-1">Row Total Value</span>
                         <div className="flex items-baseline gap-1">
@@ -814,11 +833,12 @@ export default function AssociationBillEntryPage() {
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-muted/50">
-                            <TableHead className="min-w-[220px] font-bold text-foreground">Item</TableHead>
-                            <TableHead className="w-[100px] min-w-[80px] font-bold text-foreground">Qty</TableHead>
-                            <TableHead className="w-[120px] min-w-[100px] font-bold text-foreground">Price</TableHead>
-                            <TableHead className="w-[120px] min-w-[100px] text-right font-bold text-foreground">Value</TableHead>
-                            <TableHead className="w-[60px]"></TableHead>
+                            <TableHead className="min-w-[200px] font-bold text-foreground">Item</TableHead>
+                            <TableHead className="w-[100px] min-w-[80px] font-bold text-foreground">Qty (kg)</TableHead>
+                            <TableHead className="w-[115px] min-w-[95px] font-bold text-foreground">Pieces (pcs)</TableHead>
+                            <TableHead className="w-[110px] min-w-[95px] font-bold text-foreground">Price</TableHead>
+                            <TableHead className="w-[110px] min-w-[95px] text-right font-bold text-foreground">Value</TableHead>
+                            <TableHead className="w-[50px]"></TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -857,6 +877,23 @@ export default function AssociationBillEntryPage() {
                                   placeholder="0"
                                   className="px-2 md:px-3 h-10 font-bold"
                                 />
+                              </TableCell>
+                              <TableCell>
+                                <div className="space-y-1">
+                                  <Input
+                                    value={it.pieces}
+                                    onChange={(e) => updateItem(idx, { pieces: e.target.value })}
+                                    onFocus={() => setActiveRowIndex(idx)}
+                                    inputMode="numeric"
+                                    placeholder="0 pcs"
+                                    className="px-2 md:px-3 h-10 font-bold"
+                                  />
+                                  {toNumber(it.qty) > 0 && toNumber(it.pieces) > 0 && (
+                                    <span className="text-[10px] text-emerald-600 font-semibold block text-center">
+                                      {(toNumber(it.pieces) / toNumber(it.qty)).toFixed(1)} pcs/kg
+                                    </span>
+                                  )}
+                                </div>
                               </TableCell>
                               <TableCell>
                                 <Input
@@ -947,7 +984,7 @@ export default function AssociationBillEntryPage() {
                             </Button>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-3">
+                          <div className="grid grid-cols-3 gap-2">
                             <div className="space-y-1.5">
                               <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Qty (KG)</Label>
                               <Input
@@ -955,6 +992,17 @@ export default function AssociationBillEntryPage() {
                                 onChange={(e) => updateItem(idx, { qty: e.target.value })}
                                 onFocus={() => setActiveRowIndex(idx)}
                                 inputMode="decimal"
+                                placeholder="0"
+                                className="bg-background font-bold"
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Pieces (Pcs)</Label>
+                              <Input
+                                value={it.pieces}
+                                onChange={(e) => updateItem(idx, { pieces: e.target.value })}
+                                onFocus={() => setActiveRowIndex(idx)}
+                                inputMode="numeric"
                                 placeholder="0"
                                 className="bg-background font-bold"
                               />
@@ -1006,7 +1054,15 @@ export default function AssociationBillEntryPage() {
                     </div>
 
                     <div className="mt-4 md:mt-0 p-4 md:p-0 flex items-center justify-between border-t border-border md:border-none">
-                      <p className="text-sm font-medium text-muted-foreground">Grand Total</p>
+                      <div className="space-y-0.5">
+                        <p className="text-sm font-medium text-muted-foreground">Grand Total</p>
+                        {computedTotalPieces > 0 && (
+                          <p className="text-xs font-semibold text-emerald-600">
+                            Total Pieces: {computedTotalPieces.toLocaleString()} pcs
+                            {computedTotalQty > 0 && ` (${(computedTotalPieces / computedTotalQty).toFixed(1)} pcs/kg)`}
+                          </p>
+                        )}
+                      </div>
                       <p className="text-2xl font-display font-bold text-primary">Rs. {computedTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </div>
                   </CardContent>
@@ -1081,6 +1137,7 @@ export default function AssociationBillEntryPage() {
                           items={items.map((it, idx) => ({
                             description: it.description,
                             qty: it.qty,
+                            pieces: it.pieces,
                             unit_price: it.unit_price,
                             line_total: lineTotals[idx]
                           }))}

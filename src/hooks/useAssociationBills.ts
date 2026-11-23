@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Database, Json } from '@/integrations/supabase/types';
 import { sendWhatsAppNotification } from '@/lib/whatsapp';
+import { triggerAutoSyncIfEnabled } from '@/lib/googleSheetSync';
 
 type AssociationBill = Database['public']['Tables']['association_bills']['Row'];
 type AssociationBillInsert = Database['public']['Tables']['association_bills']['Insert'];
@@ -63,6 +64,7 @@ export function useCreateAssociationBill() {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['association_bills'] });
+      triggerAutoSyncIfEnabled();
       // Condition 1: New availability/bill submitted (Goes to the Approving Officer)
       // Hardcoded or dynamically fetched phone number can be used
       sendWhatsAppNotification(
@@ -117,6 +119,7 @@ export function useReviewAssociationBill() {
     },
     onSuccess: (data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['association_bills'] });
+      triggerAutoSyncIfEnabled();
       // Condition 2: Approved or rejected (Goes to the association that submitted it)
       const statusText = variables.status === 'approved' ? '✅ APPROVED' : '❌ REJECTED';
       sendWhatsAppNotification(
@@ -143,6 +146,7 @@ export function useUpdateAssociationBill() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['association_bills'] });
+      triggerAutoSyncIfEnabled();
     },
   });
 }
@@ -191,6 +195,7 @@ export function useBatchUpdateBoxAndTagNumbers() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['association_bills'] });
+      triggerAutoSyncIfEnabled();
     },
   });
 }

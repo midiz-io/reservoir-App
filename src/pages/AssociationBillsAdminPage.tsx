@@ -9,12 +9,15 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFoo
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, Eye, CheckCircle2, Inbox, Search, Package, Hash, ThermometerSnowflake, Save, Edit3, Users, CheckSquare, Square, X, Plus, XCircle, RefreshCw } from 'lucide-react';
+import { Loader2, Eye, CheckCircle2, Inbox, Search, Package, Hash, ThermometerSnowflake, Save, Edit3, Users, CheckSquare, Square, X, Plus, XCircle, RefreshCw, ExternalLink, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { useAssociationBills, useReviewAssociationBill, useBatchUpdateBoxAndTagNumbers, useUpdateAssociationBill } from '@/hooks/useAssociationBills';
 import { cn } from '@/lib/utils';
 import { BillViewDialog } from '@/components/bills/BillViewDialog';
+import { TagNumberInput } from '@/components/bills/TagNumberInput';
+import { useGoogleSheetSyncConfig, useSyncCollectionBillsToSheet } from '@/hooks/useGoogleSheetSync';
+import { GoogleSheetSyncDialog } from '@/components/reports/GoogleSheetSyncDialog';
 
 type BillStatus = 'pending' | 'approved' | 'rejected';
 
@@ -39,6 +42,9 @@ export default function AssociationBillsAdminPage() {
   const review = useReviewAssociationBill();
   const updateBill = useUpdateAssociationBill();
   const batchUpdateBoxTag = useBatchUpdateBoxAndTagNumbers();
+  const { data: sheetConfig } = useGoogleSheetSyncConfig();
+  const syncToSheet = useSyncCollectionBillsToSheet();
+  const [isSyncDialogOpen, setIsSyncDialogOpen] = useState(false);
 
   const [statusFilter, setStatusFilter] = useState<BillStatus>('pending');
   const [search, setSearch] = useState('');
@@ -69,6 +75,46 @@ export default function AssociationBillsAdminPage() {
   const [boxTags, setBoxTags] = useState<{boxNumber: string, sealingTagNumber: string}[]>([{boxNumber: '', sealingTagNumber: ''}]);
   const [iceQty, setIceQty] = useState('');
   const [approvalRemarks, setApprovalRemarks] = useState('');
+  const [editableItems, setEditableItems] = useState<any[]>([]);
+
+  const handleOpenReviewModal = (bill: any) => {
+    setSelected(bill);
+    setIsApproveMode(false);
+    const parsedItems = Array.isArray(bill.items) ? bill.items : [];
+    setEditableItems(
+      parsedItems.map((it: any) => ({
+        ...it,
+        pieces: it.pieces !== undefined && it.pieces !== null ? String(it.pieces) : '',
+      }))
+    );
+  };
+
+  const handleItemPiecesChange = (idx: number, val: string) => {
+    setEditableItems((prev) =>
+      prev.map((it, i) => (i === idx ? { ...it, pieces: val } : it))
+    );
+  };
+
+  const handleSavePieces = async () => {
+    if (!selected) return;
+    try {
+      const updatedItems = editableItems.map((it) => ({
+        description: it.description,
+        qty: Number(it.qty) || 0,
+        unit_price: Number(it.unit_price) || 0,
+        line_total: Number(it.line_total || (Number(it.qty) || 0) * (Number(it.unit_price) || 0)) || 0,
+        pieces: Number(it.pieces) || 0,
+      }));
+      await updateBill.mutateAsync({
+        id: selected.id,
+        items: updatedItems as any,
+      });
+      setSelected({ ...selected, items: updatedItems });
+      toast.success(`Pieces updated for Invoice #${selected.bill_no}`);
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to save pieces');
+    }
+  };
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -212,6 +258,19 @@ export default function AssociationBillsAdminPage() {
       const finalBoxNumber = boxTags.map(bt => bt.boxNumber.trim()).filter(Boolean).join(', ');
       const finalSealingTagNumber = boxTags.map(bt => bt.sealingTagNumber.trim()).filter(Boolean).join(', ');
 
+      // Persist any pieces entered by the Center Manager during review/approval
+      const updatedItems = editableItems.map((it) => ({
+        description: it.description,
+        qty: Number(it.qty) || 0,
+        unit_price: Number(it.unit_price) || 0,
+        line_total: Number(it.line_total || (Number(it.qty) || 0) * (Number(it.unit_price) || 0)) || 0,
+        pieces: Number(it.pieces) || 0,
+      }));
+      await updateBill.mutateAsync({
+        id: selected.id,
+        items: updatedItems as any,
+      });
+
       await review.mutateAsync({
         id: selected.id,
         status: 'approved',
@@ -293,6 +352,11 @@ export default function AssociationBillsAdminPage() {
     return items.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
   };
 
+  const calculateTotalPieces = (items: any[]) => {
+    if (!Array.isArray(items)) return 0;
+    return items.reduce((sum, item) => sum + (Number(item.pieces) || 0), 0);
+  };
+
   const calculateTotalUnitPrice = (items: any[]) => {
     if (!Array.isArray(items)) return 0;
     return items.reduce((sum, item) => sum + (Number(item.unit_price) || 0), 0);
@@ -303,6 +367,33 @@ export default function AssociationBillsAdminPage() {
     return items.reduce((sum, item) => sum + (Number(item.line_total || (item.qty * item.unit_price)) || 0), 0);
   };
 
+  const approvedBillsForSync = useMemo(
+    () => (bills || []).filter((b: any) => b.status === 'approved'),
+    [bills]
+  );
+
+  const handleSyncGoogleSheet = async () => {
+    if (!sheetConfig?.apps_script_url?.trim()) {
+      setIsSyncDialogOpen(true);
+      return;
+    }
+    try {
+      const res = await syncToSheet.mutateAsync({
+        bills: approvedBillsForSync,
+        config: sheetConfig,
+        sheetTitle: 'Collection Bills',
+      });
+      toast.success(`Synced ${res.rowCount} collection bills to Google Sheet!`);
+      if (res.sheetUrl) {
+        window.open(res.sheetUrl, '_blank', 'noopener,noreferrer');
+      } else {
+        setIsSyncDialogOpen(true);
+      }
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to sync to Google Sheet');
+    }
+  };
+
   return (
     <div className="animate-fade-in max-w-7xl mx-auto space-y-6">
       {/* Header section based on Sketch 1 */}
@@ -311,6 +402,29 @@ export default function AssociationBillsAdminPage() {
           <h1 className="text-3xl font-display font-bold text-foreground tracking-tight underline decoration-primary/20 underline-offset-8 decoration-4">
             Field Officer Bill Approval
           </h1>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleSyncGoogleSheet}
+              disabled={syncToSheet.isPending}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm"
+            >
+              {syncToSheet.isPending ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Sync
+              <ExternalLink className="h-3.5 w-3.5 ml-1.5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => setIsSyncDialogOpen(true)}
+              title="Configure Google Sheet Sync"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
         <div className="mt-4 p-4 bg-muted/30 rounded-xl border-l-4 border-primary italic text-sm text-muted-foreground flex items-center gap-3">
           <Inbox className="h-5 w-5 text-primary shrink-0" />
@@ -526,6 +640,7 @@ export default function AssociationBillsAdminPage() {
                     <TableHead className="font-bold">Supplier</TableHead>
                     <TableHead className="font-bold">Reservoir</TableHead>
                     <TableHead className="font-bold text-right">Total kg</TableHead>
+                    <TableHead className="font-bold text-right">Pieces</TableHead>
                     <TableHead className="font-bold text-right text-primary">Purchasing Value (Rs.)</TableHead>
                     <TableHead className="w-28 text-right font-bold">Actions</TableHead>
                   </TableRow>
@@ -558,6 +673,9 @@ export default function AssociationBillsAdminPage() {
                         <TableCell className="text-right font-display font-bold text-lg">
                           {calculateTotalKg(b.items).toFixed(1)}
                         </TableCell>
+                        <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                          {calculateTotalPieces(b.items) > 0 ? `${calculateTotalPieces(b.items).toLocaleString()} pcs` : '—'}
+                        </TableCell>
                         <TableCell className="text-right font-display font-bold text-lg text-emerald-600">
                           Rs. {billTotalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </TableCell>
@@ -568,10 +686,21 @@ export default function AssociationBillsAdminPage() {
                                 variant="ghost" 
                                 size="icon" 
                                 title="Review & Approve"
-                                onClick={() => setSelected(b)}
+                                onClick={() => handleOpenReviewModal(b)}
                                 className="hover:bg-emerald-500/20 hover:text-emerald-600 transition-all rounded-full h-8 w-8 text-emerald-500"
                               >
                                 <CheckCircle2 className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {b.status !== 'pending' && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                title="Edit Pieces / Review Details"
+                                onClick={() => handleOpenReviewModal(b)}
+                                className="hover:bg-blue-500/20 hover:text-blue-600 transition-all rounded-full h-8 w-8 text-blue-500"
+                              >
+                                <Edit3 className="h-4 w-4" />
                               </Button>
                             )}
                             {b.status !== 'pending' && (
@@ -646,10 +775,11 @@ export default function AssociationBillsAdminPage() {
               <Label htmlFor="batch_tag_number" className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
                 <Hash className="h-3.5 w-3.5 text-primary" /> Sealing Tag Number
               </Label>
-              <Input
+              <TagNumberInput
                 id="batch_tag_number"
                 value={batchSealingTagNumber}
-                onChange={(e) => setBatchSealingTagNumber(e.target.value)}
+                onChange={setBatchSealingTagNumber}
+                allowMultiple
                 placeholder="Ex: TAG-101"
                 className="h-11 font-bold text-lg bg-muted/10 border-2 focus-visible:border-primary"
               />
@@ -714,10 +844,13 @@ export default function AssociationBillsAdminPage() {
               <Label htmlFor="single_tag_number" className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-muted-foreground">
                 <Hash className="h-3.5 w-3.5 text-primary" /> Sealing Tag Number
               </Label>
-              <Input
+              <TagNumberInput
                 id="single_tag_number"
                 value={singleSealingTagNumber}
-                onChange={(e) => setSingleSealingTagNumber(e.target.value)}
+                onChange={setSingleSealingTagNumber}
+                reservoirId={singleEditingBill?.reservoir_id}
+                excludeBillId={singleEditingBill?.id}
+                allowMultiple
                 placeholder="Ex: TAG-101"
                 className="h-11 font-bold text-lg bg-muted/10 border-2 focus-visible:border-primary"
               />
@@ -805,42 +938,96 @@ export default function AssociationBillsAdminPage() {
                   </Button>
                 </div>
 
-                {/* Items Table based on Sketch 1 */}
-                <div className="rounded-2xl border overflow-hidden">
-                  <Table>
-                    <TableHeader className="bg-muted/50">
-                      <TableRow>
-                        <TableHead className="font-bold">Item Description</TableHead>
-                        <TableHead className="w-24 text-center font-bold">Qty</TableHead>
-                        <TableHead className="w-32 text-right font-bold">Unit Price</TableHead>
-                        <TableHead className="w-32 text-right font-bold">Total</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {selected.items.map((it: any, idx: number) => (
-                        <TableRow key={idx}>
-                          <TableCell className="font-medium">{it.description}</TableCell>
-                          <TableCell className="text-center">{it.qty}</TableCell>
-                          <TableCell className="text-right">Rs. {Number(it.unit_price).toLocaleString()}</TableCell>
-                          <TableCell className="text-right font-bold">Rs. {Number(it.line_total || (it.qty * it.unit_price)).toLocaleString()}</TableCell>
+                {/* Items Table with Center Manager Pieces Entry */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">
+                        Collection Items & Pieces (pcs)
+                      </h3>
+                      <p className="text-xs text-muted-foreground">
+                        Add or update the pieces count for each item (e.g., 1 kg → 5 pcs).
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleSavePieces}
+                      disabled={updateBill.isPending}
+                      className="border-primary/40 text-primary hover:bg-primary hover:text-white font-bold"
+                    >
+                      {updateBill.isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                      ) : (
+                        <Save className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Save Pieces
+                    </Button>
+                  </div>
+                  <div className="rounded-2xl border overflow-hidden">
+                    <Table>
+                      <TableHeader className="bg-muted/50">
+                        <TableRow>
+                          <TableHead className="font-bold">Item Description</TableHead>
+                          <TableHead className="w-24 text-center font-bold">Qty (kg)</TableHead>
+                          <TableHead className="w-36 text-center font-bold">Pieces (pcs)</TableHead>
+                          <TableHead className="w-28 text-right font-bold">Unit Price</TableHead>
+                          <TableHead className="w-32 text-right font-bold">Total</TableHead>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                    <TableFooter className="bg-muted/30 font-bold border-t-2">
-                      <TableRow className="hover:bg-transparent">
-                        <TableCell className="font-bold uppercase tracking-wider text-muted-foreground">TOTAL KG</TableCell>
-                        <TableCell className="text-center font-black text-primary text-base">
-                          {calculateTotalKg(selected.items).toFixed(1)} kg
-                        </TableCell>
-                        <TableCell className="text-right text-muted-foreground font-bold">
-                          Rs. {calculateTotalUnitPrice(selected.items).toLocaleString()}
-                        </TableCell>
-                        <TableCell className="text-right font-black text-primary text-base">
-                          Rs. {calculateTotalAmount(selected.items).toLocaleString()}
-                        </TableCell>
-                      </TableRow>
-                    </TableFooter>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {editableItems.map((it: any, idx: number) => {
+                          const qty = Number(it.qty) || 0;
+                          const pcs = Number(it.pieces) || 0;
+                          return (
+                            <TableRow key={idx}>
+                              <TableCell className="font-medium">{it.description}</TableCell>
+                              <TableCell className="text-center font-mono">{it.qty}</TableCell>
+                              <TableCell className="text-center">
+                                <div className="flex flex-col items-center gap-1">
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="1"
+                                    inputMode="numeric"
+                                    value={it.pieces}
+                                    onChange={(e) => handleItemPiecesChange(idx, e.target.value)}
+                                    placeholder="0 pcs"
+                                    className="h-9 w-24 text-center font-bold"
+                                  />
+                                  {qty > 0 && pcs > 0 && (
+                                    <span className="text-[10px] font-semibold text-emerald-600">
+                                      {(pcs / qty).toFixed(1)} pcs/kg
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">Rs. {Number(it.unit_price).toLocaleString()}</TableCell>
+                              <TableCell className="text-right font-bold">Rs. {Number(it.line_total || (it.qty * it.unit_price)).toLocaleString()}</TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                      <TableFooter className="bg-muted/30 font-bold border-t-2">
+                        <TableRow className="hover:bg-transparent">
+                          <TableCell className="font-bold uppercase tracking-wider text-muted-foreground">TOTAL</TableCell>
+                          <TableCell className="text-center font-black text-primary text-base">
+                            {calculateTotalKg(editableItems).toFixed(1)} kg
+                          </TableCell>
+                          <TableCell className="text-center font-black text-emerald-600 text-base">
+                            {calculateTotalPieces(editableItems).toLocaleString()} pcs
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground font-bold">
+                            Rs. {calculateTotalUnitPrice(editableItems).toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right font-black text-primary text-base">
+                            Rs. {calculateTotalAmount(editableItems).toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      </TableFooter>
+                    </Table>
+                  </div>
                 </div>
 
                 {/* Approve/Reject Buttons in Preview - triggers the form */}
@@ -897,10 +1084,12 @@ export default function AssociationBillsAdminPage() {
                             </div>
                             <div className="w-full space-y-2">
                               <Label className="text-[10px] uppercase text-muted-foreground font-bold">Sealing Tag No.</Label>
-                              <Input
+                              <TagNumberInput
                                 value={bt.sealingTagNumber}
-                                onChange={(e) => updateBoxTag(index, 'sealingTagNumber', e.target.value)}
-                                placeholder="Enter tag no."
+                                onChange={(val) => updateBoxTag(index, 'sealingTagNumber', val)}
+                                reservoirId={selected?.reservoir_id}
+                                excludeBillId={selected?.id}
+                                placeholder="Enter or select tag no."
                                 className="h-11 font-bold bg-background border-2 focus-visible:border-primary"
                               />
                             </div>
@@ -976,6 +1165,13 @@ export default function AssociationBillsAdminPage() {
         open={isViewModalOpen}
         onOpenChange={setIsViewModalOpen}
         bill={viewBill}
+      />
+
+      <GoogleSheetSyncDialog
+        open={isSyncDialogOpen}
+        onOpenChange={setIsSyncDialogOpen}
+        bills={approvedBillsForSync}
+        sheetTitle="Collection Bills"
       />
     </div>
   );

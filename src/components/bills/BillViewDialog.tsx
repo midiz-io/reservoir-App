@@ -73,19 +73,36 @@ export function BillViewDialog({ open, onOpenChange, bill }: BillViewDialogProps
                 <TableRow>
                   <TableHead>Grading / Description</TableHead>
                   <TableHead className="text-right">Qty (kg)</TableHead>
+                  <TableHead className="text-right">Pieces (pcs)</TableHead>
                   <TableHead className="text-right">Unit Price (Rs)</TableHead>
                   <TableHead className="text-right">Line Total (Rs)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {bill.items?.map((item: any, idx: number) => (
-                  <TableRow key={idx}>
-                    <TableCell className="font-medium">{item.description}</TableCell>
-                    <TableCell className="text-right font-mono">{Number(item.qty).toFixed(3)}</TableCell>
-                    <TableCell className="text-right font-mono">{Number(item.unit_price).toLocaleString()}</TableCell>
-                    <TableCell className="text-right font-mono font-bold">{(Number(item.qty) * Number(item.unit_price)).toLocaleString()}</TableCell>
-                  </TableRow>
-                ))}
+                {bill.items?.map((item: any, idx: number) => {
+                  const qty = Number(item.qty) || 0;
+                  const pcs = Number(item.pieces) || 0;
+                  return (
+                    <TableRow key={idx}>
+                      <TableCell className="font-medium">{item.description}</TableCell>
+                      <TableCell className="text-right font-mono">{qty.toFixed(3)}</TableCell>
+                      <TableCell className="text-right font-mono">
+                        {pcs > 0 ? (
+                          <span>
+                            {pcs.toLocaleString()}
+                            {qty > 0 && (
+                              <span className="text-[11px] text-muted-foreground ml-1">
+                                ({(pcs / qty).toFixed(1)}/kg)
+                              </span>
+                            )}
+                          </span>
+                        ) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{Number(item.unit_price).toLocaleString()}</TableCell>
+                      <TableCell className="text-right font-mono font-bold">{(qty * Number(item.unit_price)).toLocaleString()}</TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

@@ -5,11 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, Printer, Calendar, BarChart3, Filter, ArrowLeft, Download, FileSpreadsheet, FileText } from 'lucide-react';
+import { Loader2, Printer, Calendar, BarChart3, Filter, ArrowLeft, Download, FileSpreadsheet, FileText, RefreshCw, Settings, ExternalLink } from 'lucide-react';
+import { toast } from 'sonner';
 import { useAssociationBills } from '@/hooks/useAssociationBills';
 import { useEmployees } from '@/hooks/useEmployees';
 import { useReservoirs } from '@/hooks/useReservoirs';
 import { useLocations } from '@/hooks/useLocations';
+import { useGoogleSheetSyncConfig, useSyncCollectionBillsToSheet } from '@/hooks/useGoogleSheetSync';
+import { GoogleSheetSyncDialog } from '@/components/reports/GoogleSheetSyncDialog';
 
 type ReportType = 'daily' | 'weekly' | 'monthly' | 'yearly';
 type ActiveTabType = 'details' | 'valuation';
@@ -25,8 +28,11 @@ export default function HarvestDetailsReportPage() {
     const [searchBillNo, setSearchBillNo] = useState<string>('');
     const [startDate, setStartDate] = useState<string>(new Date().toLocaleDateString('en-CA'));
     const [endDate, setEndDate] = useState<string>(new Date().toLocaleDateString('en-CA'));
+    const [isSyncDialogOpen, setIsSyncDialogOpen] = useState(false);
 
     const { data: bills, isLoading: billsLoading } = useAssociationBills();
+    const { data: sheetConfig } = useGoogleSheetSyncConfig();
+    const syncToSheet = useSyncCollectionBillsToSheet();
     const { data: employees } = useEmployees();
     const { data: reservoirs } = useReservoirs();
     const { data: locations } = useLocations();
@@ -112,14 +118,17 @@ export default function HarvestDetailsReportPage() {
             const items = Array.isArray(bill.items) ? bill.items : [];
             const itemQtys: Record<string, number> = {};
             let totalKg = 0;
+            let totalPieces = 0;
             let totalAmount = 0;
 
             items.forEach((it: any) => {
                 const desc = (it.description || '').trim();
                 const qty = Number(it.qty) || 0;
+                const pcs = Number(it.pieces) || 0;
                 const amt = Number(it.line_total || (qty * Number(it.unit_price || 0))) || 0;
                 itemQtys[desc] = (itemQtys[desc] || 0) + qty;
                 totalKg += qty;
+                totalPieces += pcs;
                 totalAmount += amt;
             });
 
@@ -134,6 +143,7 @@ export default function HarvestDetailsReportPage() {
                 bill_no: bill.bill_no || '—',
                 itemQtys,
                 total_kg: totalKg,
+                total_pieces: totalPieces,
                 total_amount: totalAmount,
             };
         });
@@ -143,6 +153,7 @@ export default function HarvestDetailsReportPage() {
     const columnTotals = useMemo(() => {
         const itemTotals: Record<string, number> = {};
         let grandTotalKg = 0;
+        let grandTotalPieces = 0;
         let grandTotalAmount = 0;
 
         reportRows.forEach((row) => {
@@ -150,10 +161,11 @@ export default function HarvestDetailsReportPage() {
                 itemTotals[col] = (itemTotals[col] || 0) + (row.itemQtys[col] || 0);
             });
             grandTotalKg += row.total_kg;
+            grandTotalPieces += row.total_pieces;
             grandTotalAmount += row.total_amount;
         });
 
-        return { itemTotals, grandTotalKg, grandTotalAmount };
+        return { itemTotals, grandTotalKg, grandTotalPieces, grandTotalAmount };
     }, [reportRows, itemColumns]);
 
     const boxTagSummary = useMemo(() => {
@@ -273,6 +285,7 @@ export default function HarvestDetailsReportPage() {
                 qtyGalIsso,
                 rateGalIsso,
                 valGalIsso,
+                otherQty,
                 totalQty,
                 totalVal,
             };
@@ -289,6 +302,7 @@ export default function HarvestDetailsReportPage() {
         let totValRej = 0;
         let totQtyGal = 0;
         let totValGal = 0;
+        let totOtherQty = 0;
         let grandQty = 0;
         let grandVal = 0;
 
@@ -301,6 +315,7 @@ export default function HarvestDetailsReportPage() {
             totValRej += r.valRej;
             totQtyGal += r.qtyGalIsso;
             totValGal += r.valGalIsso;
+            totOtherQty += r.otherQty;
             grandQty += r.totalQty;
             grandVal += r.totalVal;
         });
@@ -323,6 +338,7 @@ export default function HarvestDetailsReportPage() {
             totQtyGal,
             avgRateGal,
             totValGal,
+            totOtherQty,
             grandQty,
             grandVal,
         };
@@ -337,6 +353,35 @@ export default function HarvestDetailsReportPage() {
         window.print();
     };
 
+    const allApprovedBills = useMemo(
+        () => (bills || []).filter((b: any) => b.status === 'approved'),
+        [bills]
+    );
+
+    const handleSyncGoogleSheet = async () => {
+        if (!sheetConfig?.apps_script_url?.trim()) {
+            setIsSyncDialogOpen(true);
+            return;
+        }
+        const billsToSync = filteredBills.length > 0 ? filteredBills : allApprovedBills;
+        try {
+            const res = await syncToSheet.mutateAsync({
+                bills: billsToSync,
+                config: sheetConfig,
+                sheetTitle: selectedCenterName ? `${selectedCenterName} Collection Bills` : 'Collection Bills',
+            });
+            toast.success(`Synced ${res.rowCount} collection bills to Google Sheet!`);
+            if (res.sheetUrl) {
+                window.open(res.sheetUrl, '_blank', 'noopener,noreferrer');
+            } else {
+                toast.info('Add your Google Sheet URL in Sync Settings to auto-open it in a new tab.');
+                setIsSyncDialogOpen(true);
+            }
+        } catch (err: any) {
+            toast.error(err?.message || 'Failed to sync to Google Sheet');
+        }
+    };
+
     const handleExportCSV = () => {
         if (activeReportTab === 'valuation') {
             const headers = [
@@ -345,7 +390,7 @@ export default function HarvestDetailsReportPage() {
                 '150g up EXP', '150g up Rate', 'Value',
                 'Rej', 'Reject Rate', 'Value',
                 'Gal isso', 'Rate', 'Value',
-                'Total Qty', 'Value'
+                'Other', 'Total Qty', 'Value'
             ];
 
             const rows = valuationRows.map(r => [
@@ -367,6 +412,7 @@ export default function HarvestDetailsReportPage() {
                 r.qtyGalIsso > 0 ? r.qtyGalIsso.toFixed(3) : '',
                 r.rateGalIsso > 0 ? Math.round(r.rateGalIsso) : '',
                 r.valGalIsso > 0 ? Math.round(r.valGalIsso) : 0,
+                r.otherQty > 0 ? r.otherQty.toFixed(3) : '',
                 r.totalQty.toFixed(3),
                 r.totalVal > 0 ? Math.round(r.totalVal) : 0
             ]);
@@ -385,6 +431,7 @@ export default function HarvestDetailsReportPage() {
                 valuationTotals.totQtyGal.toFixed(3),
                 valuationTotals.avgRateGal !== null ? Math.round(valuationTotals.avgRateGal) : '#DIV/0!',
                 valuationTotals.totValGal.toFixed(3),
+                valuationTotals.totOtherQty.toFixed(3),
                 valuationTotals.grandQty.toFixed(3),
                 valuationTotals.grandVal.toFixed(3)
             ];
@@ -399,7 +446,7 @@ export default function HarvestDetailsReportPage() {
             link.click();
             document.body.removeChild(link);
         } else {
-            const headers = ['Date', 'Reservoir', 'Collector', 'Field officer', 'Bill No', ...itemColumns, 'Total kg'];
+            const headers = ['Date', 'Reservoir', 'Collector', 'Field officer', 'Bill No', ...itemColumns, 'Total kg', 'Total Pieces'];
             const rows = reportRows.map(r => [
                 `"${r.date}"`,
                 `"${r.reservoir_name}"`,
@@ -407,12 +454,14 @@ export default function HarvestDetailsReportPage() {
                 `"${r.field_officer}"`,
                 `"${r.bill_no}"`,
                 ...itemColumns.map(col => (r.itemQtys[col] || 0).toFixed(3)),
-                r.total_kg.toFixed(3)
+                r.total_kg.toFixed(3),
+                r.total_pieces
             ]);
             const totalRow = [
                 'Totals', '', '', '', '',
                 ...itemColumns.map(col => (columnTotals.itemTotals[col] || 0).toFixed(3)),
-                columnTotals.grandTotalKg.toFixed(3)
+                columnTotals.grandTotalKg.toFixed(3),
+                columnTotals.grandTotalPieces
             ];
             const csvContent = [headers.join(','), ...rows.map(row => row.join(',')), totalRow.join(',')].join('\n');
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -454,7 +503,28 @@ export default function HarvestDetailsReportPage() {
                     <h1 className="text-2xl font-display font-bold text-foreground">Harvest Reports</h1>
                     <p className="text-muted-foreground">View and export structured harvest summaries and valuation sheets</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                        onClick={handleSyncGoogleSheet}
+                        disabled={syncToSheet.isPending}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-sm"
+                    >
+                        {syncToSheet.isPending ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                        )}
+                        Sync
+                        <ExternalLink className="h-3.5 w-3.5 ml-1.5" />
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setIsSyncDialogOpen(true)}
+                        title="Configure Google Sheet Auto-Sync"
+                    >
+                        <Settings className="h-4 w-4" />
+                    </Button>
                     <Button onClick={handleExportCSV} variant="outline" className="border-border">
                         <Download className="h-4 w-4 mr-2" />
                         Export CSV
@@ -619,6 +689,11 @@ export default function HarvestDetailsReportPage() {
                                         <span>{columnTotals.grandTotalKg.toFixed(3)} kg</span>
                                     </div>
 
+                                    <div className="flex justify-between items-center text-sm font-bold text-emerald-600">
+                                        <span className="text-muted-foreground">Total Pieces</span>
+                                        <span>{columnTotals.grandTotalPieces.toLocaleString()} pcs</span>
+                                    </div>
+
                                     <div className="flex justify-between items-center text-sm font-bold text-primary">
                                         <span className="text-muted-foreground">Total Amount</span>
                                         <span>Rs. {columnTotals.grandTotalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
@@ -681,6 +756,7 @@ export default function HarvestDetailsReportPage() {
                                             {itemColumns.map((col) => (
                                                 <th key={col} className="border border-black p-1.5 text-right">{col}</th>
                                             ))}
+                                            <th className="border border-black p-1.5 text-right">Pieces</th>
                                             <th className="border border-black p-1.5 text-right bg-[#d96b63] text-white">Total kg</th>
                                         </tr>
                                     </thead>
@@ -697,6 +773,9 @@ export default function HarvestDetailsReportPage() {
                                                         {(row.itemQtys[col] || 0).toFixed(3)}
                                                     </td>
                                                 ))}
+                                                <td className="border border-black p-1.5 text-right font-mono">
+                                                    {row.total_pieces > 0 ? row.total_pieces.toLocaleString() : '—'}
+                                                </td>
                                                 <td className="border border-black p-1.5 text-right font-bold bg-slate-50">
                                                     {row.total_kg.toFixed(3)}
                                                 </td>
@@ -710,6 +789,9 @@ export default function HarvestDetailsReportPage() {
                                                     {(columnTotals.itemTotals[col] || 0).toFixed(3)}
                                                 </td>
                                             ))}
+                                            <td className="border border-black p-1.5 text-right font-bold">
+                                                {columnTotals.grandTotalPieces.toLocaleString()}
+                                            </td>
                                             <td className="border border-black p-1.5 text-right font-black bg-[#c95b53] text-white text-xs">
                                                 {columnTotals.grandTotalKg.toFixed(3)}
                                             </td>
@@ -787,6 +869,7 @@ export default function HarvestDetailsReportPage() {
                                             <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap">Gal isso</th>
                                             <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap text-[#c00000]">Rate</th>
                                             <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap text-[#c00000]">Value</th>
+                                            <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap">Other</th>
                                             <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap">Total Qty</th>
                                             <th className="border border-black px-1.5 py-1.5 text-right whitespace-nowrap">Value</th>
                                         </tr>
@@ -823,6 +906,9 @@ export default function HarvestDetailsReportPage() {
                                                 <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-semibold text-rose-600">{row.rateGalIsso > 0 ? Math.round(row.rateGalIsso).toLocaleString() : ''}</td>
                                                 <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-medium">{row.valGalIsso > 0 ? Math.round(row.valGalIsso).toLocaleString() : '0'}</td>
 
+                                                {/* Other */}
+                                                <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-mono">{row.otherQty > 0 ? row.otherQty.toFixed(3) : ''}</td>
+
                                                 {/* Total Qty & Value */}
                                                 <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-bold bg-slate-50 font-mono">{row.totalQty.toFixed(3)}</td>
                                                 <td className="border border-black px-1.5 py-1 text-right whitespace-nowrap font-bold bg-slate-50">{row.totalVal > 0 ? Math.round(row.totalVal).toLocaleString() : '0'}</td>
@@ -848,6 +934,8 @@ export default function HarvestDetailsReportPage() {
                                             <td className="border border-black px-1.5 py-1.5 text-right font-mono">{valuationTotals.totQtyGal.toFixed(3)}</td>
                                             <td className="border border-black px-1.5 py-1.5 text-right font-semibold text-rose-700">{valuationTotals.avgRateGal !== null ? Math.round(valuationTotals.avgRateGal).toLocaleString() : '#DIV/0!'}</td>
                                             <td className="border border-black px-1.5 py-1.5 text-right">{valuationTotals.totValGal.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</td>
+
+                                            <td className="border border-black px-1.5 py-1.5 text-right font-mono">{valuationTotals.totOtherQty.toFixed(3)}</td>
 
                                             <td className="border border-black px-1.5 py-1.5 text-right font-black font-mono">{valuationTotals.grandQty.toFixed(3)}</td>
                                             <td className="border border-black px-1.5 py-1.5 text-right font-black">{valuationTotals.grandVal.toLocaleString(undefined, { minimumFractionDigits: 3, maximumFractionDigits: 3 })}</td>
@@ -885,6 +973,12 @@ export default function HarvestDetailsReportPage() {
           }
         }
       `}</style>
+            <GoogleSheetSyncDialog
+                open={isSyncDialogOpen}
+                onOpenChange={setIsSyncDialogOpen}
+                bills={filteredBills.length > 0 ? filteredBills : allApprovedBills}
+                sheetTitle={selectedCenterName ? `${selectedCenterName} Collection Bills` : 'Collection Bills'}
+            />
         </div>
     );
 }
