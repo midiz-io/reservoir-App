@@ -21,7 +21,7 @@ export function useEmployeeLocations() {
 
   useEffect(() => {
     const channel = supabase
-      .channel('employee_locations_changes')
+      .channel(`employee_locations_changes-${Math.random().toString(36).slice(2, 10)}`)
       .on(
         'postgres_changes',
         {

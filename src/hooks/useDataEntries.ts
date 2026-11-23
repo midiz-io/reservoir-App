@@ -20,7 +20,7 @@ export function useDataEntries() {
 
   useEffect(() => {
     const channel = supabase
-      .channel('data_entries_changes')
+      .channel(`data_entries_changes-${Math.random().toString(36).slice(2, 10)}`)
       .on(
         'postgres_changes',
         {

@@ -911,7 +911,7 @@ export default function AssociationBillEntryPage() {
                                   })()}
                                   className={(() => {
                                     const matchingItem = catalog?.find(ci =>
-                                      ci.item_description.toLowerCase() === it.description.toLowerCase() &&
+                                      ci.item_description?.toLowerCase() === it.description?.toLowerCase() &&
                                       (!ci.reservoir_id || ci.reservoir_id === reservoirId)
                                     );
                                     return matchingItem ? "bg-muted px-2 md:px-3 h-10 font-bold" : "px-2 md:px-3 h-10 font-bold";
@@ -1017,14 +1017,14 @@ export default function AssociationBillEntryPage() {
                                 placeholder="0"
                                 readOnly={(() => {
                                   const matchingItem = catalog?.find(ci =>
-                                    ci.item_description.toLowerCase() === it.description.toLowerCase() &&
+                                    ci.item_description?.toLowerCase() === it.description?.toLowerCase() &&
                                     (!ci.reservoir_id || ci.reservoir_id === reservoirId)
                                   );
                                   return !!matchingItem;
                                 })()}
                                 className={(() => {
                                   const matchingItem = catalog?.find(ci =>
-                                    ci.item_description.toLowerCase() === it.description.toLowerCase() &&
+                                    ci.item_description?.toLowerCase() === it.description?.toLowerCase() &&
                                     (!ci.reservoir_id || ci.reservoir_id === reservoirId)
                                   );
                                   return matchingItem ? "bg-muted font-bold" : "bg-background font-bold";

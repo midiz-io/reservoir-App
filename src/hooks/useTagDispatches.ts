@@ -18,7 +18,7 @@ export function useTagDispatches() {
 
   useEffect(() => {
     const channel = supabase
-      .channel('tag-dispatches-changes')
+      .channel(`tag-dispatches-changes-${Math.random().toString(36).slice(2, 10)}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'tag_dispatches' },

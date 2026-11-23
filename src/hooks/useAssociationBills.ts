@@ -16,9 +16,10 @@ export function useAssociationBills() {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    // Set up Realtime WebSockets to instantly refresh data
+    // Set up Realtime WebSockets to instantly refresh data using a unique channel per hook mount
+    const channelName = `association-bills-changes-${Math.random().toString(36).slice(2, 10)}`;
     const channel = supabase
-      .channel('association-bills-changes')
+      .channel(channelName)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'association_bills' },

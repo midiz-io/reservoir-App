@@ -100,7 +100,7 @@ export function useIceDetails() {
 
   useEffect(() => {
     const channel = supabase
-      .channel('ice-details-changes')
+      .channel(`ice-details-changes-${Math.random().toString(36).slice(2, 10)}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'ice_details' },
